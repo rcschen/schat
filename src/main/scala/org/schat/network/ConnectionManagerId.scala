@@ -1,4 +1,9 @@
 package org.schat.network
 
-private [schat] class ConnectionManagerId(){}
+import java.net._
+
+private [schat] class ConnectionManagerId(host: String, port:Int){
+  assert (port > 0)
+  def toSocketAddress = new InetSocketAddress(host, port)
+}
 
