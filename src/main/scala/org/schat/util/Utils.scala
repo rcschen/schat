@@ -7,12 +7,13 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder
 import org.schat.Logging
 
 private[schat] object Utils extends Logging {
-   
+     private val portMaxRetries = 100
+
      private val daeminThreadFactoryBuilder: ThreadFactoryBuilder = 
              new ThreadFactoryBuilder().setDaemon(true)
 
      private var customHostname: Option[String] = None
-
+    
      lazy val localIpAddress: String = findLocalIpAddress()
      lazy val localIpAddressHostname: String = getAddressHostname(localIpAddress)
 
@@ -52,4 +53,31 @@ private[schat] object Utils extends Logging {
            address.getHostAddress
          }
      }
+
+     def startServiceOnPort[T] ( startPort: Int,
+                                 startService: Int =>(T, Int),
+                                 serviceName: String ="",
+                                 maxRetries:Int = portMaxRetries ): (T, Int) = {
+         val serviceString = if (serviceName.isEmpty) "" else s" '$serviceName'"
+         for ( offset <- 0 to maxRetries ) {
+             val tryPort = if ( startPort == 0 ) startPort else (startPort + offset) % 65535
+             try {
+                val (service, port) = startService(tryPort)
+                logInfo(s" Successfully started service $serviceString on port $port.")
+                return (service, port)
+             } catch {
+                case e: Exception => if (tryPort >= maxRetries) {
+                     logError(s"Service $serviceString is fialed to bind on port $tryPort")
+                     throw e
+                }
+                logWarning(s"Service $serviceString could not bind on port $tryPort. "+ s"Attempting port ${tryPort + 1}.")
+             }
+         }
+         return (null.asInstanceOf[T], -1)
+     }
+
+
+
+
+
 }
