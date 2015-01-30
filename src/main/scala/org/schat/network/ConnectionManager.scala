@@ -51,6 +51,7 @@ private[schat] class ConnectionManager(
        serverChannel.socket.bind(new InetSocketAddress(port))
        (serverChannel, serverChannel.socket.getLocalPort)
    }
+
    Utils.startServiceOnPort[ServerSocketChannel] (port, startService, name) 
    serverChannel.register(selector, SelectionKey.OP_ACCEPT)
    val id = new ConnectionManagerId(Utils.localHostName, serverChannel.socket.getLocalPort)
@@ -58,16 +59,116 @@ private[schat] class ConnectionManager(
    private val selectorThread = new Thread("connection-manager-thread") {
        override def run() = ConnectionManager.this.run()
    }
+
    logInfo("selector Daemon is override")
    selectorThread.setDaemon(true)
    selectorThread.start()
    logInfo("selector Daemon is started")
   
    def run()  {
-     while(true) {    
-        logInfo("!!!Connection Manager Daemon is started already!!!")
-     }
+       try {
+            logInfo("!!!Start to run selectorThread daemon!!!"+ selectorThread.isInterrupted)
+            while( !selectorThread.isInterrupted ) {    
+
+                logInfo("!!!Connection Manager Daemon is started already!!!")
+
+                val selectedKeysCount = try {
+                       selector.select()
+                } catch {
+                       case e: CancelledKeyException => {
+                               val allKeys = selector.keys().iterator()
+                               while(allKeys.hasNext) {
+                                     val key = allKeys.next()
+                                     try{
+                                            if ( !key.isValid ) {
+                                                 logInfo("Key not valid? "+ key)
+                                                 throw new CancelledKeyException()
+                                            }  
+                                     } catch {
+                                            case e: CancelledKeyException => {
+                                                    logInfo("key already cancelled ? " + key, e)
+                                                    triggerForceCloseByException(key, e)
+                                            }
+                                            case e: Exception => {
+                                                    logError("Exception processing key " + key, e)
+                                                    triggerForceCloseByException(key, e)
+                                            }
+                                     }
+                               }
+                       }
+                       0
+                }
+
+                logInfo("selectedKeysCount is " +selectedKeysCount)
+
+                if (selectedKeysCount == 0) {
+                   logDebug("Selector selected " + selectedKeysCount + " of " + selector.keys.size + " keys")
+                }
+
+                if (selectorThread.isInterrupted) {
+                   logInfo("Selector thread was interrupted!")
+                   return
+                }
+    
+                if ( 0 != selectedKeysCount ) {
+                       val selectedKeys = selector.selectedKeys().iterator() 
+                       while ( selectedKeys.hasNext )  {
+                               val key = selectedKeys.next
+                               selectedKeys.remove()
+                               try {
+                                   if (key.isValid) {
+                                         if( key.isAcceptable ) {
+                                             logInfo("-in daemon--5-1---key->isAcceptable")
+                                             acceptConnection(key)
+                                         } else 
+                                         if( key.isConnectable) {
+                                             logInfo("-in daemon--5-2----key->isConnectable")
+                                             triggerConnect(key)
+                                         } else
+                                         if( key.isReadable) {
+                                             logInfo("-in daemon--5-3---key->isReadable")
+                                             triggerRead(key)
+                                         } else
+                                         if( key.isWritable) {
+                                             logInfo("-in daemon--5-4---key->isWriteable")
+                                             triggerWrite(key)
+                                         }
+                                   } else {
+                                         logInfo("Key not valid ? " + key)
+                                         throw new CancelledKeyException()
+                                   }
+                               } catch {
+                                     case e: CancelledKeyException => {
+                                             logInfo("key already cancelled ? " + key, e)
+                                             triggerForceCloseByException(key, e)
+                                     }
+                                     case e: Exception => {
+                                             logError("Exception processing key " + key, e)
+                                             triggerForceCloseByException(key, e)
+                                     }
+
+                               }                    
+                       }
+ 
+                }
+
+                                                
+            }
+       } catch {
+            case e: Exception => logError("Error in select loop", e)
+       }
+    }
+   def acceptConnection ( key: SelectionKey ) {}
+   def triggerConnect (key : SelectionKey ) {}
+   def triggerRead ( key: SelectionKey ) {}
+   def triggerWrite ( key: SelectionKey ) {}
+  
+ 
+   private def triggerForceCloseByException( key: SelectionKey, e: Exception) { 
+           logDebug(" triggerForceCloseByException is triggered "+ key + " e:"+e)
+           // to be done 
    }
-   
-   while(true){}
+   while(true){
+     selector.wakeup()
+   }
 }

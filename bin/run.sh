@@ -5,9 +5,6 @@ echo $BUILDPATH
 PROJECTNAME=`grep name $BUILDPATH | awk -F := '{print $2}' | sed 's/[[:blank:]]//g' | sed 's/"//g'`
 PROJECTVERSION=`grep version $BUILDPATH | awk -F := '{print $2}' | sed 's/[[:blank:]]//g' | sed 's/"//g'`
 SCALAVERSION=`grep scalaVersion $BUILDPATH | awk -F := '{print $2}' | sed 's/[[:blank:]]//g' | sed 's/"//g' | awk -F \. '{print $1"."$2}'`
-echo "---->"$PROJECTNAME
-echo "---->"$PROJECTVERSION
-echo "---->"$SCALAVERSION
 JAR_HOME=$FWDIR/lib
 JARPATH="`ls $JAR_HOME |sed "s:^:$JAR_HOME\/:"| xargs | sed  's/[[:blank:]]/:/g'`"
 echo $JARPATH
