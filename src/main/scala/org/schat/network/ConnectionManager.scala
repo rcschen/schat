@@ -5,6 +5,13 @@ import java.nio.channels._
 import java.nio.channels.spi._
 import java.net._
 import java.util.concurrent.{LinkedBlockingDeque, TimeUnit, ThreadPoolExecutor}
+import java.util.concurrent.atomic.AtomicInteger
+
+import scala.collection.mutable.{HashMap, SynchronizedMap}
+import scala.collection.mutable.SynchronizedQueue
+import scala.collection.mutable.HashSet
+
+import scala.collection.JavaConverters._
 
 import org.schat.util.Utils
 import org.schat.{Logging, SchatConf}
@@ -14,7 +21,10 @@ private[schat] class ConnectionManager(
         conf: SchatConf,
         name: String="Default name") extends Logging {
 
+   private val idCount: AtomicInteger = new AtomicInteger(1)
    private val selector = SelectorProvider.provider.openSelector()
+   private val connectionsByKey = new HashMap[ SelectionKey, Connection ] with SynchronizedMap[ SelectionKey, Connection ]
+   private val keyInterestChangeRequests = new SynchronizedQueue[(SelectionKey, Int)]
 
    private val handleMessageExecutor = new ThreadPoolExecutor(
            conf.getInt("schart.network.connection.handler.threads.min", 20),
@@ -71,7 +81,6 @@ private[schat] class ConnectionManager(
             while( !selectorThread.isInterrupted ) {    
 
                 logInfo("!!!Connection Manager Daemon is started already!!!")
-
                 val selectedKeysCount = try {
                        selector.select()
                 } catch {
@@ -111,9 +120,12 @@ private[schat] class ConnectionManager(
                 }
     
                 if ( 0 != selectedKeysCount ) {
-                       val selectedKeys = selector.selectedKeys().iterator() 
+                       val selectedKeys = selector.selectedKeys().iterator()
+                       logInfo("--------------------------")
                        while ( selectedKeys.hasNext )  {
                                val key = selectedKeys.next
+                               logInfo("KKKKKKKKKKKKKKKKK"+key)
+
                                selectedKeys.remove()
                                try {
                                    if (key.isValid) {
@@ -158,9 +170,82 @@ private[schat] class ConnectionManager(
             case e: Exception => logError("Error in select loop", e)
        }
     }
-   def acceptConnection ( key: SelectionKey ) {}
+   def acceptConnection ( key: SelectionKey ) {
+       val sc = key.channel.asInstanceOf[ServerSocketChannel] 
+       var newChannel = sc.accept()
+       logInfo("here is newChannel "+newChannel)
+       while(newChannel != null ) {
+            logInfo("In accapt loop: "+ newChannel)
+            try {
+                 val newConnectionId = new ConnectionId(id, idCount.getAndIncrement.intValue )
+                 val newConnection   = new ReceivingConnection(newChannel, selector, newConnectionId)
+                 newConnection.onReceive(receiveMessage)
+                 addListeners(newConnection)
+                 addConnection(newConnection)
+                 logInfo("Accepted connection from [" + newConnection.remoteAddress + "]")
+            } catch {
+                 case e: Exception => logError("Error in accept loop", e)
+            }
+            newChannel = sc.accept()
+       }
+   }
+
+   def addListeners( connection: Connection ) {
+       connection.onKeyInterestChange(changeConnectionKeyInterest)
+       connection.onException(handleConnectionError)
+       connection.onClose(removeConnection)
+   }
+
+   def changeConnectionKeyInterest(connection: Connection, ops: Int) {
+       keyInterestChangeRequests += ((connection.key, ops))
+       wakeupSelector()
+   }  
+
+   def handleConnectionError( connection: Connection, e:Exception) {}
+   def removeConnection(connection: Connection) {} 
+   def wakeupSelector() {
+       selector.wakeup()
+   }
+
+   def addConnection( connection: Connection) {
+       logInfo("connections :"+ connectionsByKey)
+       connectionsByKey += (( connection.key, connection))
+   }
+   
+   def receiveMessage(connection: Connection, message: Message) {} 
    def triggerConnect (key : SelectionKey ) {}
-   def triggerRead ( key: SelectionKey ) {}
+
+   private val readRunnableStarted: HashSet[SelectionKey] = new HashSet[SelectionKey]()
+   def triggerRead ( key: SelectionKey ) {
+       logInfo("Start to trigger Read" + key)
+       val conn = connectionsByKey.getOrElse(key, null)
+       if ( conn == null ) return
+
+       readRunnableStarted.synchronized {
+           if ( conn.changeInterestForRead() ) conn.unregisterInterest()
+           if ( readRunnableStarted.contains(key) ) {
+                return
+           }
+           readRunnableStarted += key
+       }
+     
+       handleReadWriteExecutor.execute ( new Runnable {
+             override def run() {
+                  var register: Boolean =false
+                  try {
+                    register = conn.read()
+                  } finally {
+                       readRunnableStarted.synchronized {
+                              readRunnableStarted -= key
+                              if ( register && conn.changeInterestForRead() ) {
+                                   conn.registerInterest()
+                              }
+                       }
+                  }
+             }
+       })
+
+   }
    def triggerWrite ( key: SelectionKey ) {}
   
  
@@ -169,6 +254,6 @@ private[schat] class ConnectionManager(
            // to be done 
    }
    while(true){
-     selector.wakeup()
+     //selector.wakeup()
    }
 }
