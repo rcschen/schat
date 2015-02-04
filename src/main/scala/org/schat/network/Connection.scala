@@ -119,7 +119,7 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
                         }
                         headerBuffer.flip
                         if (headerBuffer.remaining != MessageChunkHeader.HEADER_SIZE) {
-                            throw new Exception("Unexcepted ("+ headerBuffer.remaining+") in the header"
+                            throw new Exception("Unexcepted ("+headerBuffer.remaining+") in the header")
                         }
                     }
                 }
