@@ -12,14 +12,14 @@ private[schat] object Utils extends Logging {
      private val daeminThreadFactoryBuilder: ThreadFactoryBuilder = 
              new ThreadFactoryBuilder().setDaemon(true)
 
+     def namedThreadFactory(prefix: String):ThreadFactory = {
+          daeminThreadFactoryBuilder.setNameFormat(prefix + "-%d").build()
+     }
+
      private var customHostname: Option[String] = None
     
      lazy val localIpAddress: String = findLocalIpAddress()
      lazy val localIpAddressHostname: String = getAddressHostname(localIpAddress)
-
-     def namedThreadFactory(prefix: String):ThreadFactory = {
-          daeminThreadFactoryBuilder.setNameFormat(prefix + "-%d").build()
-     }
 
      def localHostName(): String = {
          customHostname.getOrElse(localIpAddressHostname)
@@ -75,9 +75,4 @@ private[schat] object Utils extends Logging {
          }
          return (null.asInstanceOf[T], -1)
      }
-
-
-
-
-
 }
