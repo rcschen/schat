@@ -27,7 +27,7 @@ private [schat] class MessageChunkHeader ( val typ: Long,
                          put(ip).
                          putInt(port).
                          position(MessageChunkHeader.HEADER_SIZE).
-                         flip
+                         flip.asInstanceOf[ByteBuffer]
      }
    
      override def toString = ""+ this.getClass.getSimpleName + ":" + id + " of type " + typ + 

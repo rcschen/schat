@@ -3,6 +3,7 @@ package org.schat.network
 import java.net._
 import java.nio._
 import java.nio.channels._
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 import org.schat.Logging
 
 private [schat] abstract class Connection(val channel:SocketChannel,
@@ -88,9 +89,27 @@ private [schat] abstract class Connection(val channel:SocketChannel,
 private [schat] class ReceivingConnection( channel_  : SocketChannel,
                                            selector_ : Selector,
                                            id_       : ConnectionId ) extends Connection ( channel_, selector_, id_){
+
         var onReceiveCallback : (Connection, Message) =>Unit  = null
         var currentChunk: MessageChunk = null
- 
+        class Inbox() {
+              val messages = new HashMap[Int, BufferMessage]()
+
+              def getChunk(header: MessageChunkHeader) : Option[MessageChunk] = {
+                  def createNewMessage: BufferMessage = {
+                      val newMessage = Message.create(header).asInstanceOf[BufferMessage]
+                      newMessage.startTime = System.currentTimeMillis
+                      newMessage.isSecurityNeg = header.securityNeg == 1
+                      messages += ((newMessage.id, newMessage))
+                      newMessage
+                  }
+                  val message = messages.getOrElseUpdate(header.id, createNewMessage)
+                  message.getChunkForReceiving(header.chunkSize) 
+              }
+
+        }
+        val inbox = new Inbox()
+
         channel.register(selector, SelectionKey.OP_READ) 
         
         def onReceive( callback: (Connection, Message ) => Unit) {
@@ -121,6 +140,24 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
                         if (headerBuffer.remaining != MessageChunkHeader.HEADER_SIZE) {
                             throw new Exception("Unexcepted ("+headerBuffer.remaining+") in the header")
                         }
+                        val header = MessageChunkHeader.create( headerBuffer )
+                        headerBuffer.clear()
+                        //processConnectionManagerId(header)
+                        header.typ match {
+                               case Message.BUFFER_MESSAGE => {}
+                               case _=> throw new Exception("Message of unknown type received")
+                        }
+                        
+                        val bytesRead = channel.read(currentChunk.buffer)
+                        if (bytesRead == 0) {
+                             return true
+                        } else if(bytesRead == -1) {
+                             close()
+                             return false
+                        } 
+                        if (currentChunk.buffer.remaining == 0) {
+                        } 
+ 
                     }
                 }
               } catch {
