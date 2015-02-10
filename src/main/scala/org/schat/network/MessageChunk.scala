@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 
 import scala.collection.mutable.ArrayBuffer
 
-private[network] class MessageChunk(val header: MessageChunkHeader, val buffer: ByteBuffer) {
+private [schat] class MessageChunk(val header: MessageChunkHeader, val buffer: ByteBuffer) {
      val size = if( buffer == null ) 0 else buffer.remaining
      lazy val buffers = {
           val ab = new ArrayBuffer[ByteBuffer]()

@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.{HashMap, SynchronizedMap}
 import scala.collection.mutable.SynchronizedQueue
 import scala.collection.mutable.HashSet
-
+import scala.concurrent.{Future}
 import scala.collection.JavaConverters._
 
 import org.schat.util.Utils
@@ -25,6 +25,7 @@ private[schat] class ConnectionManager(
    private val selector = SelectorProvider.provider.openSelector()
    private val connectionsByKey = new HashMap[ SelectionKey, Connection ] with SynchronizedMap[ SelectionKey, Connection ]
    private val keyInterestChangeRequests = new SynchronizedQueue[(SelectionKey, Int)]
+   private var onReceiveCallback: (BufferMessage, ConnectionManagerId) => Option[Message] = null
 
    private val handleMessageExecutor = new ThreadPoolExecutor(
            conf.getInt("schart.network.connection.handler.threads.min", 20),
@@ -121,11 +122,8 @@ private[schat] class ConnectionManager(
     
                 if ( 0 != selectedKeysCount ) {
                        val selectedKeys = selector.selectedKeys().iterator()
-                       logInfo("--------------------------")
                        while ( selectedKeys.hasNext )  {
                                val key = selectedKeys.next
-                               logInfo("KKKKKKKKKKKKKKKKK"+key)
-
                                selectedKeys.remove()
                                try {
                                    if (key.isValid) {
@@ -253,6 +251,14 @@ private[schat] class ConnectionManager(
            logDebug(" triggerForceCloseByException is triggered "+ key + " e:"+e)
            // to be done 
    }
+   def onReceiveMessage(callback: (Message, ConnectionManagerId) => Option[Message]) {
+       onReceiveCallback = callback
+   }
+   def sendMessageReliably(connectionManagerId: ConnectionManagerId, 
+                           message: Message) : Future[Message] = {
+       null       
+   }
+
    while(true){
      //selector.wakeup()
    }
