@@ -1,12 +1,15 @@
 package org.schat.network
 
+import java.io.IOException
 import java.nio._
 import java.nio.channels._
 import java.nio.channels.spi._
 import java.net._
 import java.util.concurrent.{LinkedBlockingDeque, TimeUnit, ThreadPoolExecutor}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.{Timer, TimerTask}
 
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.collection.mutable.{HashMap, SynchronizedMap}
 import scala.collection.mutable.SynchronizedQueue
 import scala.collection.mutable.HashSet
@@ -20,12 +23,29 @@ private[schat] class ConnectionManager(
         port: Int,
         conf: SchatConf,
         name: String="Default name") extends Logging {
+   
+   class MessageStatus( val message: Message,
+                        val connectionManagerId: ConnectionManagerId,
+                        completionHandler: MessageStatus => Unit ) {
 
+         var ackMessage: Option[Message] = None
+         def markDone(ackMessage: Option[Message]) {
+             this.ackMessage = ackMessage
+             completionHandler(this)
+         }
+   }
+
+   private val ackTimeoutMonitor = new Timer("AckTimeoutMonitor", true)
    private val idCount: AtomicInteger = new AtomicInteger(1)
+   private val registerRequests = new SynchronizedQueue[SendingConnection]
+
    private val selector = SelectorProvider.provider.openSelector()
    private val connectionsByKey = new HashMap[ SelectionKey, Connection ] with SynchronizedMap[ SelectionKey, Connection ]
    private val keyInterestChangeRequests = new SynchronizedQueue[(SelectionKey, Int)]
    private var onReceiveCallback: (BufferMessage, ConnectionManagerId) => Option[Message] = null
+   private val ackTimeout = conf.getInt("spark.core.connection.ack.wait.timeout", 60)
+   private val messageStatuses = new HashMap[Int, MessageStatus]
+   private val connectionsById = new HashMap[ConnectionManagerId, SendingConnection]
 
    private val handleMessageExecutor = new ThreadPoolExecutor(
            conf.getInt("schart.network.connection.handler.threads.min", 20),
@@ -256,7 +276,54 @@ private[schat] class ConnectionManager(
    }
    def sendMessageReliably(connectionManagerId: ConnectionManagerId, 
                            message: Message) : Future[Message] = {
-       null       
+       val promise = Promise[Message]()
+       val timeoutTask = new TimerTask {
+           override def run(): Unit ={
+             messageStatuses.synchronized {
+                messageStatuses.remove(message.id).foreach( s=> {
+                         promise.failure( new IOException("sendMessageReliably failed because ack "+
+                                          s"was not received within $ackTimeout sec"))
+                })
+             }
+           }
+       }
+ 
+       val status = new MessageStatus(message, connectionManagerId, s => {
+           timeoutTask.cancel()
+           s.ackMessage match {
+                case None => promise.failure(new IOException("sendMessageReliably failed without being ACK'd"))
+                case Some(ackMessage) =>
+                     if(ackMessage.hasError) {
+                         new IOException("sendMessageReliably failed with ACK that signalled a remote error")
+                     } else {
+                         promise.success(ackMessage)
+                     }
+           }
+       }) 
+       messageStatuses.synchronized { 
+           messageStatuses += ((message.id, status))
+       }
+       ackTimeoutMonitor.schedule(timeoutTask, ackTimeout * 1000)
+       sendMessage(connectionManagerId, message)
+       promise.future
+   }
+
+   private def sendMessage(connectionManagerId: ConnectionManagerId, message: Message) {
+       def startNewConnection(): SendingConnection = {
+           val inetSocketAddress = new InetSocketAddress( connectionManagerId.host,
+                                                          connectionManagerId.port)
+           val newConnectionId = new ConnectionId( id, idCount.getAndIncrement.intValue )
+           val newConnection = new SendingConnection( inetSocketAddress, 
+                                                      selector, 
+                                                      connectionManagerId, 
+                                                      newConnectionId )
+           registerRequests.enqueue(newConnection)
+           newConnection
+       }
+       val connection = connectionsById.getOrElseUpdate(connectionManagerId, startNewConnection())
+       message.senderAddress = id.toSocketAddress()
+       //connection.send(message)
+       wakeupSelector()
    }
 
    while(true){

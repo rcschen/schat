@@ -20,7 +20,7 @@ private[schat] object SenderTest {
     val targetPort = args(1).toInt
     val targetConnectionManagerId = new ConnectionManagerId(targetHost, targetPort)
     val conf = new SchatConf
-    val manager = new ConnectionManager(0, conf, null)
+    val manager = new ConnectionManager(0, conf)
     println("Started connection manager with id = " + manager.id)
 
     manager.onReceiveMessage((msg: Message, id: ConnectionManagerId) => {

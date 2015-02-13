@@ -4,7 +4,7 @@ import java.net._
 
 private [schat] case class ConnectionManagerId(host: String, port:Int){
   assert (port > 0)
-  def toSocketAddress = new InetSocketAddress(host, port)
+  def toSocketAddress() = new InetSocketAddress(host, port)
 }
 
 private [schat] object ConnectionManagerId {

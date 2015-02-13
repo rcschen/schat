@@ -6,8 +6,10 @@ import org.schat.SchatConf
 
 private[schat] object ReceiverTest {
   def main(args: Array[String]) {
+    println("--------------------------!!-----")
+
     val conf = new SchatConf
-    val manager = new ConnectionManager(9999, conf, null)
+    val manager = new ConnectionManager(9999, conf)
     println("Started connection manager with id = " + manager.id)
 
     manager.onReceiveMessage((msg: Message, id: ConnectionManagerId) => {

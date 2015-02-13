@@ -83,7 +83,21 @@ private [schat] abstract class Connection(val channel:SocketChannel,
             //disposeSasl()
             callOnCloseCallback()
         }
-    
+}    
+
+private [schat] class SendingConnection(val address: InetSocketAddress, 
+                                        selector_ : Selector, 
+                                        remoteId_ : ConnectionManagerId, 
+                                        id_ : ConnectionId)  extends Connection(SocketChannel.open, 
+                                                                                selector_, 
+                                                                                remoteId_, 
+                                                                                id_) {
+        def changeInterestForRead(): Boolean = true
+        def registerInterest(): Unit={}
+        def unregisterInterest(): Unit={}
+
+        def send( message:Message ) {}
+   
 }
 
 private [schat] class ReceivingConnection( channel_  : SocketChannel,
