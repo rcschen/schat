@@ -322,7 +322,7 @@ private[schat] class ConnectionManager(
        }
        val connection = connectionsById.getOrElseUpdate(connectionManagerId, startNewConnection())
        message.senderAddress = id.toSocketAddress()
-       //connection.send(message)
+       connection.send(message)
        wakeupSelector()
    }
 

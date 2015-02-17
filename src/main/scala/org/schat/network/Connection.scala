@@ -3,7 +3,7 @@ package org.schat.network
 import java.net._
 import java.nio._
 import java.nio.channels._
-import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.collection.mutable.{ArrayBuffer, HashMap, Queue}
 import org.schat.Logging
 
 private [schat] abstract class Connection(val channel:SocketChannel,
@@ -92,11 +92,55 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
                                                                                 selector_, 
                                                                                 remoteId_, 
                                                                                 id_) {
+        private class Outbox {
+            val messages = new Queue[Message]()
+            val defaultChunkSize = 65536
+            var nextMessageToBeUsed = 0
+            def addMessage(message: Message) {
+                messages.synchronized {
+                       messages.enqueue(message)
+                       logInfo("Add ["+ message +"] to outbox for sending to [" + getRemoteConnectionManagerId() +"]")
+                }
+            }
+            def getChunk():Option[ MessageChunk ] = {
+                messages.synchronized {
+                     while( !messages.isEmpty ) {
+                             val message = messages.dequeue()
+                             val chunk = message.getChunkForSending(defaultChunkSize)
+                             if ( chunk.isDefined ) {
+                                  messages.enqueue(message)
+                                  nextMessageToBeUsed = nextMessageToBeUsed + 1
+                                  if ( !message.started ) {
+                                       logDebug( "Starting to send [" + message + "] to [" + getRemoteConnectionManagerId() + "]" )
+                                       message.started = true
+                                       message.startTime = System.currentTimeMillis
+                                  }
+                                  return chunk
+                             } else {
+                                   message.finishTime = System.currentTimeMillis
+                                   logDebug("Finished sending [" + message + "] to [" + getRemoteConnectionManagerId() + "] in "  + message.timeTaken )
+                             }
+                     }
+                }
+                None
+            }
+        }
+        private val outbox = new Outbox()
+        private var needForceReregister = false
+
         def changeInterestForRead(): Boolean = true
         def registerInterest(): Unit={}
         def unregisterInterest(): Unit={}
 
-        def send( message:Message ) {}
+        def send( message:Message ) {
+            outbox.synchronized { 
+                outbox.addMessage(message)
+                needForceReregister = true
+            }
+            if (channel.isConnected) { 
+                registerInterest()
+            }
+        }
    
 }
 
