@@ -80,7 +80,9 @@ trait Logging {
   }
 
   protected def isTraceEnabled(): Boolean = {
-    log.isTraceEnabled
+    //log.isTraceEnabled
+    // use true to replace log.isTraceEnable
+    true 
   }
 
   private def initializeIfNecessary() {

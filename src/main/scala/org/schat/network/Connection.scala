@@ -141,6 +141,23 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
                 registerInterest()
             }
         }
+        
+        def connect() { 
+            try{
+                   channel.register(selector, SelectionKey.OP_CONNECT)
+                   channel.connect(address)
+                   logInfo("Initiating connection to [" + address + "]")
+            } catch {
+              case e: Exception => {
+                   logDebug("Connection Error" + address, e)
+                   callOnExceptionCallback(e)
+              }
+            }
+        }
+        def finishConnect(force: Boolean): Boolean = {
+            // TODO
+            true
+        }
    
 }
 

@@ -10,16 +10,19 @@ import scala.util.Try
 
 private[schat] object SenderTest {
   def main(args: Array[String]) {
-
+    println("SSSSSSSSSSSSsender starTTTTTTTTTTTTTT")
     if (args.length < 4) {
-      println("Usage: SenderTest <target host> <target port>")
+      println("Usage: SenderTest <target host> <target port> <count> <size>")
       System.exit(1)
     }
 
     val targetHost = args(0)
     val targetPort = args(1).toInt
+    println("111111111"+ targetHost + ":" + targetPort  )
     val targetConnectionManagerId = new ConnectionManagerId(targetHost, targetPort)
     val conf = new SchatConf
+    println("222222 targetConnectionManagerId:" + targetConnectionManagerId  )
+
     val manager = new ConnectionManager(0, conf)
     println("Started connection manager with id = " + manager.id)
 
@@ -34,6 +37,7 @@ private[schat] object SenderTest {
     buffer.flip
 
     val targetServer = args(0)
+    println("*** IIIIIIIt's time to send data *****")
 
     val count = args(2).toInt
     (0 until count).foreach(i => {
