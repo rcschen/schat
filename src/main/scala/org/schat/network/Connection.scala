@@ -127,10 +127,17 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
         }
         private val outbox = new Outbox()
         private var needForceReregister = false
+        val DEFAULT_INTEREST = SelectionKey.OP_READ
 
         def changeInterestForRead(): Boolean = true
-        def registerInterest(): Unit={}
-        def unregisterInterest(): Unit={}
+
+        override def registerInterest() {
+            changeConnectionKeyInterest(SelectionKey.OP_WRITE | DEFAULT_INTEREST)
+        }
+
+        override def unregisterInterest() {
+             changeConnectionKeyInterest(DEFAULT_INTEREST)
+        }
 
         def send( message:Message ) {
             outbox.synchronized { 
@@ -154,9 +161,25 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
               }
             }
         }
+
         def finishConnect(force: Boolean): Boolean = {
-            // TODO
-            true
+            try{          
+                val connected = channel.finishConnect
+                if (!force && !connected) {
+                   logInfo(
+                   "finish connect failed [" + address + "], " + outbox.messages.size + " messages pending")
+                   return false
+           
+                }
+                registerInterest()
+                logInfo("Connected to [" + address + "], " + outbox.messages.size + " messages pending")
+            } catch {
+                case e: Exception => {
+                     logWarning("Error finishing connection to " + address, e)
+                     callOnExceptionCallback(e)
+                }
+            }
+            true 
         }
    
 }

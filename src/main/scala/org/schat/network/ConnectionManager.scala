@@ -281,6 +281,7 @@ private[schat] class ConnectionManager(
    }
    
    def receiveMessage(connection: Connection, message: Message) {} 
+
    def triggerConnect (key : SelectionKey ) {
        
        val conn = connectionsByKey.getOrElse(key, null).asInstanceOf[SendingConnection]
@@ -288,9 +289,9 @@ private[schat] class ConnectionManager(
            logDebug("No Such conection in selector:"+ key)
            return
        }
-       logInfo("TTTTTriggerConnnnnnect:"+conn)
 
        conn.changeConnectionKeyInterest(0)
+
        handleConnectExecutor.execute( new Runnable {
              override def run() {
                    var tries: Int = 10
@@ -300,8 +301,10 @@ private[schat] class ConnectionManager(
                           tries -= 1
                    }
                    conn.finishConnect(true)
+
              }
-       }) 
+       })
+
    }
 
    private val readRunnableStarted: HashSet[SelectionKey] = new HashSet[SelectionKey]()
@@ -335,7 +338,10 @@ private[schat] class ConnectionManager(
        })
 
    }
-   def triggerWrite ( key: SelectionKey ) {}
+   def triggerWrite ( key: SelectionKey ) {
+       val conn = connectionsByKey.getOrElse(key, null)
+ 
+   }
   
  
    private def triggerForceCloseByException( key: SelectionKey, e: Exception) { 
