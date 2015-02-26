@@ -72,6 +72,7 @@ private[schat] class ConnectionManager(
            Utils.namedThreadFactory("handle-connect-executor"))
 
    private val serverChannel = ServerSocketChannel.open()
+   private val writeRunnableStarted: HashSet[SelectionKey] = new HashSet[SelectionKey]()
 
 
    serverChannel.configureBlocking(false)
@@ -340,6 +341,24 @@ private[schat] class ConnectionManager(
    }
    def triggerWrite ( key: SelectionKey ) {
        val conn = connectionsByKey.getOrElse(key, null)
+       if (conn == null ) return
+       writeRunnableStarted.synchronized {
+           if (conn.changeInterestForWrite()) conn.unregisterInterest()
+           if (writeRunnableStarted.contains(key)) return
+           writeRunnableStarted += key
+       }  
+
+       handleReadWriteExecutor.execute( new Runnable {
+            override def run() {
+                  try {
+                      conn.write()
+                  } finally {
+                      writeRunnableStarted.synchronized {
+                            writeRunnableStarted -= key
+                      }
+                  }
+            }
+       })
  
    }
   

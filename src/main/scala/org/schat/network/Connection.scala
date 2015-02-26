@@ -28,6 +28,7 @@ private [schat] abstract class Connection(val channel:SocketChannel,
         channel.socket.setKeepAlive(true)
    
         def changeInterestForRead(): Boolean
+        def changeInterestForWrite(): Boolean
         def registerInterest(): Unit
         def unregisterInterest(): Unit
         def remoteAddress = getRemoteAddress()
@@ -50,7 +51,7 @@ private [schat] abstract class Connection(val channel:SocketChannel,
             }
         }
         def getRemoteConnectionManagerId(): ConnectionManagerId = socketRemoteConnectionManagerId
-     
+   
         def callOnExceptionCallback(e: Exception) {
             if (onExceptionCallback != null ) {
                 onExceptionCallback(this, e)
@@ -82,6 +83,13 @@ private [schat] abstract class Connection(val channel:SocketChannel,
             channel.close()
             //disposeSasl()
             callOnCloseCallback()
+        }
+   
+        protected def isClosed: Boolean = closed
+
+        def write(): Boolean = {
+            throw new UnsupportedOperationException(
+                  "Cannot write on connection of type " + this.getClass.toString)
         }
 }    
 
@@ -117,8 +125,8 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
                                   }
                                   return chunk
                              } else {
-                                   message.finishTime = System.currentTimeMillis
-                                   logDebug("Finished sending [" + message + "] to [" + getRemoteConnectionManagerId() + "] in "  + message.timeTaken )
+                                  message.finishTime = System.currentTimeMillis
+                                  logDebug("Finished sending [" + message + "] to [" + getRemoteConnectionManagerId() + "] in "  + message.timeTaken )
                              }
                      }
                 }
@@ -127,9 +135,8 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
         }
         private val outbox = new Outbox()
         private var needForceReregister = false
+        val currentBuffers = new ArrayBuffer[ByteBuffer]()
         val DEFAULT_INTEREST = SelectionKey.OP_READ
-
-        def changeInterestForRead(): Boolean = true
 
         override def registerInterest() {
             changeConnectionKeyInterest(SelectionKey.OP_WRITE | DEFAULT_INTEREST)
@@ -181,7 +188,61 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
             }
             true 
         }
+ 
+        override def write(): Boolean = {
+            try {
+                while (true) {
+                     if (currentBuffers.size == 0) {
+                         outbox.synchronized {
+                             outbox.getChunk() match {
+                                  case Some(chunk) =>{
+                                       val buffers = chunk.buffers
+                                       if (needForceReregister && buffers.exists(_.remaining() > 0)){
+                                           resetForceReregister()
+                                       }
+                                       currentBuffers ++= buffers 
+                                  }
+                                  case None => {
+                                       return false
+                                  }
+                             }  
+                         }
+                     }
+                     if (currentBuffers.size > 0) {
+                         val buffer = currentBuffers(0)
+                         val remainingBytes = buffer.remaining
+                         val writtenBytes = channel.write(buffer)
+                         if (buffer.remaining == 0) {
+                             currentBuffers -= buffer
+                         }
+                         if (writtenBytes < remainingBytes) {
+                             return true
+                         }
+                     } 
+                }                
+            } catch {
+                case e: Exception => {
+                     logWarning("Error writing in connection to " + getRemoteConnectionManagerId(), e)
+                     callOnExceptionCallback(e)
+                     close()
+                     return false
+                }
+            }
+            true 
+        } 
    
+        def resetForceReregister(): Boolean = {
+            outbox.synchronized {
+                   val result = needForceReregister
+                   needForceReregister = false
+                   result
+            }
+        }
+      
+        override def changeInterestForRead(): Boolean = false
+
+        override def changeInterestForWrite(): Boolean = ! isClosed
+
 }
 
 private [schat] class ReceivingConnection( channel_  : SocketChannel,
@@ -220,7 +281,11 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
         override def unregisterInterest() {
               changeConnectionKeyInterest(0)
         }
- 
+  
+        override def changeInterestForWrite(): Boolean = {
+              throw new IllegalStateException("Unexpected invocation right now")
+        }
+
         val headerBuffer: ByteBuffer = ByteBuffer.allocate(MessageChunkHeader.HEADER_SIZE)
         override def read(): Boolean = {
               try {
