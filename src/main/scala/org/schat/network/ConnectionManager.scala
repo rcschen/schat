@@ -281,8 +281,73 @@ private[schat] class ConnectionManager(
        connectionsByKey += (( connection.key, connection))
    }
    
-   def receiveMessage(connection: Connection, message: Message) {} 
+   def receiveMessage(connection: Connection, message: Message) {
+       val connectionManagerId = ConnectionManagerId.fromSocketAddress(message.senderAddress)
+       logInfo("--------Received [" + message + "] from [" + connectionManagerId + "]")
+       val runnable = new Runnable() {
+           val creationTime = System.currentTimeMillis
+           def run() {
+               handleMessage(connectionManagerId, message, connection)
+           }
+       }
+       handleMessageExecutor.execute(runnable)
+   } 
+   
+   def handleMessage( connectionManagerId: ConnectionManagerId,
+                      message: Message,
+                      connection: Connection ) {
+       logInfo("Handling [" + message + "] from [" + connectionManagerId + "]")
+       message match {
+           case bufferMessage: BufferMessage => {
+                if (bufferMessage.hasAckId()) {
+                    messageStatuses.synchronized {
+                         messageStatuses.get(bufferMessage.ackId) match {
+                               case Some(status) => {
+                                   messageStatuses -= bufferMessage.ackId
+                                   status.markDone(Some(message))
+                               }
+                               case None => {
+                                   logWarning(s"Could not find reference for received ack Message ${message.id}")
+                               }
+                         }
+                    }
+                } else {
+                    var ackMessage : Option[Message] = None
+                    try {
+                         ackMessage = if(onReceiveCallback != null) {
+                            onReceiveCallback(bufferMessage, connectionManagerId)
+                         } else {
+                            logInfo("Not calling back as callback is null")
+                            None
+                         }
+                         if (ackMessage.isDefined) {
+                             if (!ackMessage.get.isInstanceOf[BufferMessage]) {
+                                 logInfo("Response to " + bufferMessage 
+                                 + " is not a buffer message, it is of type "
+                                 + ackMessage.get.getClass)
+                             } else if (!ackMessage.get.asInstanceOf[BufferMessage].hasAckId) {
+                                 logInfo("Response to " + bufferMessage + " does not have ack id set")
+                                 ackMessage.get.asInstanceOf[BufferMessage].ackId = bufferMessage.id
+                             }
+                         } 
+                    } catch {
+                         case e: Exception => { 
+                               logError(s"Exception was thrown while processing message", e)
+                               val m = Message.createBufferMessage(bufferMessage.id)
+                               m.hasError = true
+                               ackMessage = Some(m)
+                         }
+                    } finally {
+                         sendMessage(connectionManagerId, ackMessage.getOrElse{
+                                 Message.createBufferMessage(bufferMessage.id)
+                         })     
+                    }
+                } 
+           } 
+           case _ => throw new Exception("Unknown type message received")
+       }
 
+   }
    def triggerConnect (key : SelectionKey ) {
        
        val conn = connectionsByKey.getOrElse(key, null).asInstanceOf[SendingConnection]
@@ -342,6 +407,7 @@ private[schat] class ConnectionManager(
    def triggerWrite ( key: SelectionKey ) {
        val conn = connectionsByKey.getOrElse(key, null)
        if (conn == null ) return
+
        writeRunnableStarted.synchronized {
            if (conn.changeInterestForWrite()) conn.unregisterInterest()
            if (writeRunnableStarted.contains(key)) return
@@ -350,11 +416,16 @@ private[schat] class ConnectionManager(
 
        handleReadWriteExecutor.execute( new Runnable {
             override def run() {
+                  var register: Boolean = false
                   try {
-                      conn.write()
+                      register = conn.write()
                   } finally {
                       writeRunnableStarted.synchronized {
                             writeRunnableStarted -= key
+                            val needReregister = register || conn.resetForceReregister()
+                            if (needReregister && conn.changeInterestForWrite()) {
+                               conn.registerInterest()
+                            }
                       }
                   }
             }

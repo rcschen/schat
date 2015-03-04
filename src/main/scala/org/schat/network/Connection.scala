@@ -51,7 +51,8 @@ private [schat] abstract class Connection(val channel:SocketChannel,
             }
         }
         def getRemoteConnectionManagerId(): ConnectionManagerId = socketRemoteConnectionManagerId
-   
+        def resetForceReregister(): Boolean
+  
         def callOnExceptionCallback(e: Exception) {
             if (onExceptionCallback != null ) {
                 onExceptionCallback(this, e)
@@ -188,6 +189,25 @@ private [schat] class SendingConnection(val address: InetSocketAddress,
             }
             true 
         }
+        override def read(): Boolean = {
+            try {
+                val length = channel.read(ByteBuffer.allocate(1))
+                if (length == -1) { // EOF
+                     close()
+                } else if (length > 0) {
+                      logWarning("Unexpected data read from SendingConnection to " 
+                                 + getRemoteConnectionManagerId())
+                }
+            } catch {
+              case e: Exception =>
+                      logError("Exception while reading SendingConnection to " 
+                      + getRemoteConnectionManagerId(),
+                      e)
+                      callOnExceptionCallback(e)
+                      close()
+            }
+            false
+        }
  
         override def write(): Boolean = {
             try {
@@ -265,6 +285,14 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
                   val message = messages.getOrElseUpdate(header.id, createNewMessage)
                   message.getChunkForReceiving(header.chunkSize) 
               }
+           
+              def getMessageForChunk(chunk: MessageChunk): Option[BufferMessage] = {
+                  messages.get(chunk.header.id)
+              }
+ 
+              def removeMessage(message: Message) {
+                  messages -= message.id
+              }
 
         }
         val inbox = new Inbox()
@@ -306,21 +334,50 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
                         val header = MessageChunkHeader.create( headerBuffer )
                         headerBuffer.clear()
                         //processConnectionManagerId(header)
+                        logInfo("---header type------>"+header.typ+" vs "+ Message.BUFFER_MESSAGE)
                         header.typ match {
-                               case Message.BUFFER_MESSAGE => {}
+                               case Message.BUFFER_MESSAGE => {
+                                    if (header.totalSize == 0) {
+                                         if (onReceiveCallback != null) {
+                                             onReceiveCallback(this, Message.create(header))
+                                         }
+                                         currentChunk = null
+                                         return true
+                                    } else {
+                                         currentChunk = inbox.getChunk(header).orNull
+                                    }
+                               }
                                case _=> throw new Exception("Message of unknown type received")
                         }
-                        
+                        logInfo("!!!!!!Receiving already here---------1"+currentChunk) 
+                        if (currentChunk == null) {
+                            throw new Exception("No message chunk to receive data" )
+                        }
                         val bytesRead = channel.read(currentChunk.buffer)
+
+                        logInfo("!!!!!!Receiving already here---------2") 
                         if (bytesRead == 0) {
                              return true
                         } else if(bytesRead == -1) {
                              close()
                              return false
                         } 
+                        logInfo("!!!!!!Receiving already here---------3") 
+
                         if (currentChunk.buffer.remaining == 0) {
+                            val bufferMessage = inbox.getMessageForChunk(currentChunk).get
+                            if (bufferMessage.isCompletelyReceived) {
+                                bufferMessage.flip()
+                                bufferMessage.finishTime = System.currentTimeMillis
+                                logInfo("Finished receiving [" + bufferMessage + "] from " +
+                                "[" + getRemoteConnectionManagerId() + "] in " + bufferMessage.timeTaken)
+                                if (onReceiveCallback != null) {
+                                  onReceiveCallback(this, bufferMessage)
+                                }
+                                inbox.removeMessage(bufferMessage)
+                           }
+                           currentChunk = null
                         } 
- 
                     }
                 }
               } catch {
@@ -335,4 +392,6 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
               true       
         }
       
+        override def resetForceReregister(): Boolean = false
+     
 } 

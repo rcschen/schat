@@ -5,8 +5,8 @@ import scala.collection.mutable.ArrayBuffer
 import org.schat.Logging
 
 private[schat] class BufferMessage( id_ : Int, 
-                     val buffers: ArrayBuffer[ByteBuffer], 
-                     var ackId: Int) extends Message(Message.BUFFER_MESSAGE, id_) with Logging {
+                        val buffers: ArrayBuffer[ByteBuffer], 
+                        var ackId: Int) extends Message(Message.BUFFER_MESSAGE, id_) with Logging {
       val initialSize = currentSize()
       var gotChunkForSendingOnce = false
 
