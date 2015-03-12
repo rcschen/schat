@@ -25,7 +25,7 @@ private[schat] object ReceiverTest {
               //messageBuffer.flip
               println("REMAINNNNNNNNNNN"+messageBuffer.remaining)
               while(messageBuffer.remaining > 0) {
-                    println("-------GET-->---->"+messageBuffer.get())
+                    println("-------GET-->---->"+messageBuffer.get().toChar)
               }
           } catch {
               case e: Exception => println("!!!!!buffer exception!!!!"+ e)

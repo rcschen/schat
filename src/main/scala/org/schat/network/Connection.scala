@@ -333,7 +333,7 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
                         }
                         val header = MessageChunkHeader.create( headerBuffer )
                         headerBuffer.clear()
-                        //processConnectionManagerId(header)
+                        processConnectionManagerId(header)
                         logInfo("---header type------>"+header.typ+" vs "+ Message.BUFFER_MESSAGE)
                         header.typ match {
                                case Message.BUFFER_MESSAGE => {
@@ -355,7 +355,7 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
                         }
                         val bytesRead = channel.read(currentChunk.buffer)
 
-                        logInfo("!!!!!!Receiving already here---------2") 
+                        logInfo("!!!!!!Receiving already here---------2"+currentChunk.buffer.remaining) 
                         if (bytesRead == 0) {
                              return true
                         } else if(bytesRead == -1) {
@@ -393,5 +393,13 @@ private [schat] class ReceivingConnection( channel_  : SocketChannel,
         }
       
         override def resetForceReregister(): Boolean = false
-     
+        @volatile private var inferredRemoteManagerId: ConnectionManagerId = null
+        private def processConnectionManagerId(header: MessageChunkHeader) {
+                val currId = inferredRemoteManagerId
+                if (header.address == null || currId != null) return
+                val managerId = ConnectionManagerId.fromSocketAddress(header.address)
+                if (managerId != null) {
+                    inferredRemoteManagerId = managerId
+                }
+       }
 } 

@@ -33,7 +33,9 @@ private[schat] object SenderTest {
 
     //val size =  100 * 1024  * 1024
     val size = args(3).toInt
-    val buffer = ByteBuffer.allocate(size).put(Array.tabulate[Byte](size)(x => x.toByte))
+    //val buffer = ByteBuffer.allocate(size).put(Array.tabulate[Byte](size)(x => x.toByte))
+    val buffer = ByteBuffer.allocate(size).put("test115".getBytes())
+
     buffer.flip
 
     val targetServer = args(0)
