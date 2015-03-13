@@ -21,8 +21,21 @@ class SchatConf(loadDefaults :Boolean) extends Cloneable with Logging {
     def getInt( key: String, defaultValue: Int):Int = {
           settings.get(key).map(_.toInt).getOrElse(defaultValue)
     }
-        
+    def getAll: Array[(String, String)] = settings.clone().toArray
+
+    def getAkkaConf: Seq[(String, String)] = getAll.filter{ case (k, _) => isAkkaConf(k)}        
+    def set(key: String, value: String): SchatConf = {
+         if (key == null) {
+             throw new NullPointerException("null key")
+         }
+         if (value == null) {
+             throw new NullPointerException("null value")
+         }
+         settings(key) = value
+         this
+    } 
 }
 
 private [schat] object SchatConf {
+        def isAkkaConf(name: String): Boolean = name.startsWith("akka.")
 }

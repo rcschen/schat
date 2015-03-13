@@ -1,3 +1,3 @@
 package org.schat.deploy
 
-private[schat] class ChatManager() {}
+private[schat] class ChatManager(chatManagerMaster: ChatManagerMaster) {}

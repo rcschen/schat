@@ -1,2 +1,4 @@
 package org.schat.deploy
-class ChatManagerMaster() {}
+import akka.actor._
+
+class ChatManagerMaster(chatManagerMasterActor: ActorRef) {}
