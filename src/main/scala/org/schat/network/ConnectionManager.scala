@@ -41,7 +41,7 @@ private[schat] class ConnectionManager(
    private val connectionsByKey = new HashMap[ SelectionKey, Connection ] with SynchronizedMap[ SelectionKey, Connection ]
    private val keyInterestChangeRequests = new SynchronizedQueue[(SelectionKey, Int)]
    private var onReceiveCallback: (BufferMessage, ConnectionManagerId) => Option[Message] = null
-   private val ackTimeout = conf.getInt("spark.core.connection.ack.wait.timeout", 60)
+   private val ackTimeout = conf.getInt("schat.core.connection.ack.wait.timeout", 60)
    private val messageStatuses = new HashMap[Int, MessageStatus]
    private val connectionsById = new HashMap[ConnectionManagerId, SendingConnection]
    private val writeRunnableStarted: HashSet[SelectionKey] = new HashSet[SelectionKey]()

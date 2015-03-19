@@ -75,4 +75,13 @@ private[schat] object Utils extends Logging {
          }
          return (null.asInstanceOf[T], -1)
      }
+   
+     def checkHost(host: String, message: String = "") {
+         assert(host.indexOf(':') == -1, message)
+     }
+
+     def checkHostPort(hostPort: String, message: String = "") {
+         assert(hostPort.indexOf(':') != -1, message)
+    }
+
 }

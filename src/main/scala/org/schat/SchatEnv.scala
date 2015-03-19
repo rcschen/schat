@@ -25,6 +25,7 @@ object SchatEnv extends Logging {
                                     hostname: String,
                                     port: Int,
                                     isDriver:Boolean ) : SchatEnv = {
+             logInfo("EEEEEEExecutor-----+++="+isDriver)
 
              val actorSystemName = if(isDriver) driverActorSystemName else executorActorSystemName
              val (actorSystem, boundPort) = AkkaUtils.createActorSystem( actorSystemName,
@@ -32,13 +33,16 @@ object SchatEnv extends Logging {
                                                                          port, 
                                                                          conf )
                                   
+             logInfo("!!!!!!!OK CREATE ActorSystem "+actorSystemName+" Successfully!!")
+
              if (isDriver) {
-                 conf.set("spark.driver.port", boundPort.toString)
+                 conf.set("schat.driver.port", boundPort.toString)
              }
              def registerOrLookup(name: String, newActor: => Actor): ActorRef = {
                  if(isDriver) {
                     actorSystem.actorOf(Props(newActor), name = name)
                  } else {
+                    logInfo("EEEEEEExecutor-----+++=")
                     AkkaUtils.makeDriverRef(name, conf, actorSystem)
                  }
              }

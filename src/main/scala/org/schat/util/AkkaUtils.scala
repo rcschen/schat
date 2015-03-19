@@ -1,6 +1,12 @@
 package org.schat.util
 
-import akka.actor.{ActorRef, ActorSystem}
+import scala.collection.JavaConversions.mapAsJavaMap
+import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.Await
+import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
+
+import com.typesafe.config.ConfigFactory
+import org.apache.log4j.{Level, Logger}
 
 
 import org.schat.{Logging, SchatConf, SchatEnv}
@@ -9,6 +15,86 @@ private[schat] object AkkaUtils extends Logging {
        def createActorSystem(name: String,
                              host: String,
                              port: Int,
-                             conf: SchatConf): (ActorSystem, Int) = {(null, 0)}
-       def makeDriverRef(name: String, conf: SchatConf, actorSystem: ActorSystem): ActorRef = {null} 
+                             conf: SchatConf): (ActorSystem, Int) = {
+           val startService: Int =>(ActorSystem, Int) = { actualPort =>
+               doCreateActorSystem(name, host, actualPort, conf)
+           }
+           Utils.startServiceOnPort(port, startService, name)
+       }
+       def doCreateActorSystem( name: String,
+                                host: String,
+                                port: Int,
+                                conf: SchatConf )= {
+           logInfo("********"+port)
+
+           val akkaThreads = conf.getInt("schat.akka.threads", 4)
+           val akkaBatchSize = conf.getInt("schat.akka.batchSize", 15)
+           val akkaTimeout = conf.getInt("schat.akka.timeout", 100)
+           val akkaFrameSize = maxFrameSizeBytes(conf)
+           val akkaLogLifecycleEvents = conf.getBoolean("schat.akka.logLifecycleEvents", false)
+           val lifecycleEvents = if (akkaLogLifecycleEvents) "on" else "off"
+           if (!akkaLogLifecycleEvents) {
+               Option(Logger.getLogger("akka.remote.EndpointWriter")).map(l=>l.setLevel(Level.FATAL))
+           }
+           val logAkkaConfig = if (conf.getBoolean("schat.akka.logAkkaConfig", false)) "on" else "off"
+           val akkaHeartBeatPauses = conf.getInt("schat.akka.heartbeat.pauses", 600)
+           val akkaFailureDetector = conf.getDouble("schat.akka.failure-detector.threshold", 300.0)
+           val akkaHeartBeatInterval = conf.getInt("schat.akka.heartbeat.interval", 1000)
+
+           val akkaConf = ConfigFactory.parseMap(conf.getAkkaConf.toMap[String, String]).withFallback(
+                          ConfigFactory.parseString(
+             s"""
+             |akka.daemonic = on
+             |akka.loggers = [""akka.event.slf4j.Slf4jLogger""]
+             |akka.stdout-loglevel = "ERROR"
+             |akka.jvm-exit-on-fatal-error = off
+             |akka.remote.require-cookie = off
+             |akka.remote.secure-cookie = "" 
+             |akka.remote.transport-failure-detector.heartbeat-interval = $akkaHeartBeatInterval s
+             |akka.remote.transport-failure-detector.acceptable-heartbeat-pause = $akkaHeartBeatPauses s
+             |akka.remote.transport-failure-detector.threshold = $akkaFailureDetector
+             |akka.actor.provider = "akka.remote.RemoteActorRefProvider"
+             |akka.remote.netty.tcp.transport-class = "akka.remote.transport.netty.NettyTransport"
+             |akka.remote.netty.tcp.hostname = "$host"
+             |akka.remote.netty.tcp.port = $port
+             |akka.remote.netty.tcp.tcp-nodelay = on
+             |akka.remote.netty.tcp.connection-timeout = $akkaTimeout s
+             |akka.remote.netty.tcp.maximum-frame-size = ${akkaFrameSize}B
+             |akka.remote.netty.tcp.execution-pool-size = $akkaThreads
+             |akka.actor.default-dispatcher.throughput = $akkaBatchSize
+             |akka.log-config-on-start = $logAkkaConfig
+             |akka.remote.log-remote-lifecycle-events = $lifecycleEvents
+             |akka.log-dead-letters = $lifecycleEvents
+             |akka.log-dead-letters-during-shutdown = $lifecycleEvents
+             """.stripMargin))
+           logInfo("********"+akkaConf)
+           val actorSystem = ActorSystem(name, akkaConf)
+           logInfo("!!!!!!!!"+akkaConf)
+
+           val provider = actorSystem.asInstanceOf[ExtendedActorSystem].provider
+           val boundPort = provider.getDefaultAddress.port.get
+           (actorSystem, boundPort)
+
+       }
+       def maxFrameSizeBytes(conf: SchatConf): Int = {
+           conf.getInt("schat.akka.frameSize", 10) * 1024 * 1024
+       }
+
+       def makeDriverRef(name: String, conf: SchatConf, actorSystem: ActorSystem): ActorRef = {
+           println("?????????>>>>>"+name)
+
+           val driverActorSystemName = SchatEnv.driverActorSystemName
+           var driverHost: String = conf.get("schat.driver.host", "spark1")
+           var driverPort: Int = conf.getInt("schat.driver.port", 7077)
+           Utils.checkHost(driverHost, "Excepted hostname")
+           var url = s"akka.tcp://$driverActorSystemName@$driverHost:$driverPort/user/$name"
+           println("?????????>>>>>"+url)
+           val timeout = AkkaUtils.lookupTimeout(conf)
+           logInfo(s"Connecting to $name: $url")
+           Await.result(actorSystem.actorSelection(url).resolveOne(timeout), timeout)
+       } 
+
+       def lookupTimeout(conf: SchatConf): FiniteDuration = {
+           Duration.create(conf.getLong("schat.akka.lookupTimeout", 30), "seconds")
+       }
 }

@@ -10,7 +10,13 @@ JARPATH="`ls $JAR_HOME |sed "s:^:$JAR_HOME\/:"| xargs | sed  's/[[:blank:]]/:/g'
 echo $JARPATH
 JARPATH=$JARPATH":"$FWDIR"/target/scala-"$SCALAVERSION"/"$PROJECTNAME"_"$SCALAVERSION"-"$PROJECTVERSION.jar
 echo "JARPATH-->"$JARPATH
-JARPATH=$JARPATH":$SCALA_HOME/lib/scala-library.jar"
+for i in  `ls $SCALA_HOME/lib`
+do
+  JARPATH=$JARPATH":$SCALA_HOME/lib/$i"
+done
+echo "???????"
+echo $JARPATH
+echo "???????"
 java -cp "$JARPATH" "$@"
 #$PROJECTNAME=`grep name $BUILDPATH | awk -F := '{print $2}'`
 
