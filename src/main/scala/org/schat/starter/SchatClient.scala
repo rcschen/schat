@@ -23,7 +23,7 @@ object SchatClient {
            conf.set("schat.driver.port",serverPort)
 
            val env = SchatEnv.create( conf, clientIP, clientPort.toInt, false)
-           new SchatServer(conf, env)
+           new SchatClient(conf, env)
            Thread.currentThread.join()
        }
 }
