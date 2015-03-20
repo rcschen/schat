@@ -42,7 +42,6 @@ object SchatEnv extends Logging {
                  if(isDriver) {
                     actorSystem.actorOf(Props(newActor), name = name)
                  } else {
-                    logInfo("EEEEEEExecutor-----+++=")
                     AkkaUtils.makeDriverRef(name, conf, actorSystem)
                  }
              }

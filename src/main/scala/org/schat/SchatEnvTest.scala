@@ -13,7 +13,7 @@ object SchatEnvTest {
               SchatEnv.create(conf, args(3), args(4).toInt, false)
            }
            println("---------------------")
-           while(true){}
+           Thread.currentThread.join()
 
        }       
 }

@@ -82,6 +82,6 @@ private[schat] object Utils extends Logging {
 
      def checkHostPort(hostPort: String, message: String = "") {
          assert(hostPort.indexOf(':') != -1, message)
-    }
+     }
 
 }
