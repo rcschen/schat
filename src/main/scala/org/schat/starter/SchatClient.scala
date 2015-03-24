@@ -2,9 +2,10 @@ package org.schat.starter
 
 import org.schat.{Logging, SchatConf, SchatEnv}
 import org.schat.util.Utils
+import org.schat.network.{ConnectionManager, ReceiveHandler}
 
 private [schat] class SchatClient(conf: SchatConf, env:SchatEnv) extends Logging{
-
+        env.getConnectionManager.onReceiveMessage(ReceiveHandler.receivingOnCallBack) 
 }
 
 object SchatClient {

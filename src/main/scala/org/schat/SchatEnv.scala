@@ -5,8 +5,11 @@ import akka.actor._
 import org.schat.Logging
 import org.schat.util.AkkaUtils
 import org.schat.deploy._
+import org.schat.network.ConnectionManager
 
-class SchatEnv () {}
+class SchatEnv (conf: SchatConf, schatManager: ChatManager, connectionManager: ConnectionManager) {
+      def getConnectionManager(): ConnectionManager = connectionManager
+}
 
 object SchatEnv extends Logging {
         private val env = new ThreadLocal[SchatEnv]
@@ -49,6 +52,9 @@ object SchatEnv extends Logging {
                                                              "SchatManagerMaster",
                                                              new ChatManagerMasterActor()))
              val schatManager = new ChatManager( schatManagerMaster )
-             new SchatEnv()
+             val connectionManager = new ConnectionManager(conf.getInt("schat.connectionManager.port", 0), conf, "ConnectionManager") 
+             new SchatEnv(conf,
+                          schatManager,
+                          connectionManager)
         } 
 }

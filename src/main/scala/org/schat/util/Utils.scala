@@ -61,6 +61,7 @@ private[schat] object Utils extends Logging {
          val serviceString = if (serviceName.isEmpty) "" else s" '$serviceName'"
          for ( offset <- 0 to maxRetries ) {
              val tryPort = if ( startPort == 0 ) startPort else (startPort + offset) % 65535
+             logInfo("pppppppppppppp"+tryPort+" "+maxRetries)
              try {
                 val (service, port) = startService(tryPort)
                 logInfo(s" Successfully started service $serviceString on port $port.")

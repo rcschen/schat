@@ -90,7 +90,9 @@ private[schat] class ConnectionManager(
    selectorThread.start()
  
    private def startService(port: Int): (ServerSocketChannel, Int) = {
+       // if port is 0, the bound port will be random number else it will be the specified port
        serverChannel.socket.bind(new InetSocketAddress(port))
+       logInfo(">>>>>>>> "+port+" <<<<<<<<<"+"==vs==>"+serverChannel.socket.getLocalPort)
        (serverChannel, serverChannel.socket.getLocalPort)
    }
 
