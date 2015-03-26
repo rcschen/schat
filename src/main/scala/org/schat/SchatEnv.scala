@@ -51,7 +51,7 @@ object SchatEnv extends Logging {
              val schatManagerMaster = new ChatManagerMaster(registerOrLookup( 
                                                              "SchatManagerMaster",
                                                              new ChatManagerMasterActor()))
-             val schatManager = new ChatManager( schatManagerMaster )
+             val schatManager = new ChatManager( schatManagerMaster, actorSystem )
              val connectionManager = new ConnectionManager(conf.getInt("schat.connectionManager.port", 0), conf, "ConnectionManager") 
              new SchatEnv(conf,
                           schatManager,

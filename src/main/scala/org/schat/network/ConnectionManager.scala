@@ -512,6 +512,8 @@ private[schat] class ConnectionManager(
    def onReceiveMessage(callback: (Message, ConnectionManagerId) => Option[Message]) {
        onReceiveCallback = callback
    }
+   def getOnReceiveCallBack= onReceiveCallback //for test
+
    def sendMessageReliably(connectionManagerId: ConnectionManagerId, 
                            message: Message) : Future[Message] = {
        val promise = Promise[Message]()

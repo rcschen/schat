@@ -20,7 +20,7 @@ private[schat] object SenderTest {
     val targetPort = args(1).toInt
     println("111111111"+ targetHost + ":" + targetPort  )
     val targetConnectionManagerId = new ConnectionManagerId(targetHost, targetPort)
-    val conf = new SchatConf
+    val conf = new SchatConf()
     println("222222 targetConnectionManagerId:" + targetConnectionManagerId  )
 
     val manager = new ConnectionManager(0, conf)
@@ -31,8 +31,8 @@ private[schat] object SenderTest {
       None
     })
 
-    //val size =  100 * 1024  * 1024
-    val size = args(3).toInt
+    val size =  100 * 1024  * 1024
+    //val size = args(3).toInt
     //val buffer = ByteBuffer.allocate(size).put(Array.tabulate[Byte](size)(x => x.toByte))
     val buffer = ByteBuffer.allocate(size).put("test115".getBytes())
 
