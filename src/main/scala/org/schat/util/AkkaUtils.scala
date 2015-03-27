@@ -4,6 +4,7 @@ import scala.collection.JavaConversions.mapAsJavaMap
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.Await
 import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
+import akka.pattern.ask
 
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.{Level, Logger}
@@ -81,14 +82,11 @@ private[schat] object AkkaUtils extends Logging {
        }
 
        def makeDriverRef(name: String, conf: SchatConf, actorSystem: ActorSystem): ActorRef = {
-           println("?????????>>>>>"+name)
-
            val driverActorSystemName = SchatEnv.driverActorSystemName
            var driverHost: String = conf.get("schat.driver.host", "spark1")
            var driverPort: Int = conf.getInt("schat.driver.port", 7077)
            Utils.checkHost(driverHost, "Excepted hostname")
            var url = s"akka.tcp://$driverActorSystemName@$driverHost:$driverPort/user/$name"
-           println("?????????>>>>>"+url)
            val timeout = AkkaUtils.lookupTimeout(conf)
            logInfo(s"Connecting to $name: $url")
            Await.result(actorSystem.actorSelection(url).resolveOne(timeout), timeout)
@@ -97,4 +95,47 @@ private[schat] object AkkaUtils extends Logging {
        def lookupTimeout(conf: SchatConf): FiniteDuration = {
            Duration.create(conf.getLong("schat.akka.lookupTimeout", 30), "seconds")
        }
+       def askTimeout(conf: SchatConf): FiniteDuration = {
+           Duration.create(conf.getLong("spark.akka.askTimeout", 30), "seconds")
+       }
+
+       def numRetries(conf: SchatConf): Int = {
+           conf.getInt("spark.akka.num.retries", 3)
+       }
+
+       def retryWaitMs(conf: SchatConf): Int = {
+           conf.getInt("spark.akka.retry.wait", 3000)
+       }
+       def askWithReply[T] ( message: Any,
+                           actor: ActorRef,
+                           retryAttempts: Int,
+                           retryInterval: Int,
+                           timeout: FiniteDuration ): T = {
+          if (actor == null) {
+              throw new Exception("Error sending message as driverActor is null [messate: "+  message+ " ]")
+          }
+          var attempts = 0
+          var lastException: Exception = null
+          while( attempts < retryAttempts ) {
+                 attempts += 1
+                 try {
+                        var future = actor.ask(message)(timeout) // require import akka.pattern.ask
+                        var result = Await.result(future ,timeout)
+                        if (result == null) {
+                             throw new Exception("Actor returned null")
+                        }
+                        return result.asInstanceOf[T]
+
+                 } catch {
+                        case ie: InterruptedException => throw ie
+                        case e: Exception => {
+                                              lastException = e
+                                              logWarning("Error sending message in " + attempts + " attempts", e)
+                        }
+                 }
+                 Thread.sleep( retryInterval )
+          } 
+          throw new Exception("Error sending message [ message="+ message +"]")
+       } 
+
 }

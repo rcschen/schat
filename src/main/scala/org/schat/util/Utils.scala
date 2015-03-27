@@ -1,8 +1,12 @@
 package org.schat.util
 import java.net._
-import scala.collection.JavaConversions._
 import java.util.concurrent.ThreadFactory
 import com.google.common.util.concurrent.ThreadFactoryBuilder
+import scala.collection.JavaConversions._
+import scala.concurrent.Await
+import scala.concurrent.duration.{ Duration, FiniteDuration }
+import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
+import akka.pattern.ask
 
 import org.schat.Logging
 
@@ -84,5 +88,6 @@ private[schat] object Utils extends Logging {
      def checkHostPort(hostPort: String, message: String = "") {
          assert(hostPort.indexOf(':') != -1, message)
      }
-
+    
 }
+
